@@ -1,5 +1,8 @@
-// Prosty service worker — pozwala zainstalować apkę i działać bez internetu.
-const CACHE = "zakupy-v1";
+// Service worker — pozwala zainstalować apkę i działać bez internetu.
+// Strategia "sieć najpierw": gdy jest internet, zawsze pobiera najnowszą wersję
+// (więc aktualizacje z GitHuba pojawiają się od razu); offline korzysta z kopii.
+// Numer w nazwie cache podbijamy przy każdej aktualizacji plików.
+const CACHE = "zakupy-v3";
 const ASSETS = [
   ".",
   "index.html",
@@ -23,13 +26,14 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then((hit) =>
-      hit ||
-      fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-        return res;
-      }).catch(() => caches.match("index.html"))
+    // sieć najpierw; przy okazji odświeżamy kopię w cache
+    fetch(e.request).then((res) => {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+      return res;
+    }).catch(() =>
+      // brak sieci → kopia z cache (a dla nawigacji fallback na index.html)
+      caches.match(e.request).then((hit) => hit || caches.match("index.html"))
     )
   );
 });

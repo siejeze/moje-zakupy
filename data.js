@@ -65,6 +65,15 @@ window.DEFAULT_CATALOG = [
     ],
   },
   {
+    cat: "Kasze i ryż",
+    items: [
+      "Ryż biały", "Ryż brązowy", "Ryż basmati", "Ryż jaśminowy",
+      "Kasza gryczana", "Kasza jaglana", "Kasza pęczak", "Kasza bulgur",
+      "Kasza kuskus", "Kasza manna", "Płatki owsiane", "Komosa ryżowa (quinoa)",
+      "Makaron", "Makaron pełnoziarnisty",
+    ],
+  },
+  {
     cat: "Spiżarnia",
     items: [
       "Passata pomidorowa", "Pomidory w puszce", "Koncentrat pomidorowy", "Mleczko kokosowe",

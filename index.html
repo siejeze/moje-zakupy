@@ -155,26 +155,45 @@
   <script>
   "use strict";
   const STORE_KEY = "moje-zakupy-v1";
-  let state = { products: [], tab: "katalog", search: "", editMode: false };
+  // Podbij ten numer za KAŻDYM razem, gdy zmienia się lista produktów w data.js —
+  // dzięki temu już zainstalowana apka dociągnie nowe produkty przy aktualizacji.
+  const CATALOG_VERSION = 2;
+  let state = { products: [], deleted: [], tab: "katalog", search: "", editMode: false };
 
   // ---------- Trwałość danych ----------
   function load() {
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) { state.products = JSON.parse(raw); return; }
-    } catch (e) {}
-    seedFromCatalog();
-  }
-  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state.products)); }
-  function seedFromCatalog() {
-    let id = 1;
-    state.products = [];
-    for (const group of window.DEFAULT_CATALOG) {
-      for (const name of group.items) {
-        state.products.push({ id: id++, name, cat: group.cat, qty: 0, fav: false });
-      }
-    }
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+    if (Array.isArray(data)) data = { products: data, catV: 0, deleted: [] }; // migracja starego formatu
+    if (!data || !Array.isArray(data.products) || !data.products.length) { seedFromCatalog(); return; }
+    state.products = data.products;
+    state.deleted = data.deleted || [];
+    if ((data.catV || 0) < CATALOG_VERSION) mergeNewDefaults(); // dociągnij nowe produkty z data.js
     save();
+  }
+  function save() {
+    localStorage.setItem(STORE_KEY, JSON.stringify(
+      { products: state.products, deleted: state.deleted, catV: CATALOG_VERSION }));
+  }
+  function nextId() { return Math.max(0, ...state.products.map(p => p.id)) + 1; }
+  function seedFromCatalog() {
+    state.products = []; state.deleted = [];
+    let id = 1;
+    for (const group of window.DEFAULT_CATALOG)
+      for (const name of group.items)
+        state.products.push({ id: id++, name, cat: group.cat, qty: 0, fav: false });
+    save();
+  }
+  // Dokłada do istniejącej bazy NOWE produkty z data.js — bez ruszania tego, co masz,
+  // i bez wskrzeszania pozycji, które sama usunęłaś.
+  function mergeNewDefaults() {
+    const have = new Set(state.products.map(p => p.name));
+    const gone = new Set(state.deleted);
+    let id = nextId();
+    for (const group of window.DEFAULT_CATALOG)
+      for (const name of group.items)
+        if (!have.has(name) && !gone.has(name))
+          state.products.push({ id: id++, name, cat: group.cat, qty: 0, fav: false });
   }
 
   // ---------- Pomocnicze ----------
@@ -191,62 +210,85 @@
   // ---------- Akcje ----------
   function setQty(id, delta) {
     const p = state.products.find(x => x.id === id); if (!p) return;
-    p.qty = Math.max(0, (p.qty || 0) + delta); save(); render();
+    p.qty = Math.max(0, (p.qty || 0) + delta); save(); refresh();
   }
   function toggleFav(id) {
     const p = state.products.find(x => x.id === id); if (!p) return;
-    p.fav = !p.fav; save(); render();
+    p.fav = !p.fav; save(); refresh();
   }
   function delProduct(id) {
     const p = state.products.find(x => x.id === id); if (!p) return;
     if (!confirm(`Usunąć „${p.name}" z bazy? Nie będzie się już pojawiać.`)) return;
-    state.products = state.products.filter(x => x.id !== id); save(); render(); toast("Usunięto produkt");
+    if (!state.deleted.includes(p.name)) state.deleted.push(p.name); // nie wróci przy aktualizacji
+    state.products = state.products.filter(x => x.id !== id); save(); refresh(); toast("Usunięto produkt");
   }
   function addProduct(name, cat, unit) {
     name = name.trim(); if (!name) return;
-    const id = Math.max(0, ...state.products.map(p => p.id)) + 1;
-    state.products.push({ id, name, cat: cat || "Inne", unit: unit || "", qty: 0, fav: false });
+    state.deleted = state.deleted.filter(n => n !== name); // gdyby była wcześniej usunięta
+    state.products.push({ id: nextId(), name, cat: cat || "Inne", unit: unit || "", qty: 0, fav: false });
     save();
   }
   function toggleDone(id) {
     const p = state.products.find(x => x.id === id); if (!p) return;
-    p.done = !p.done; save(); render();
+    p.done = !p.done; save(); refresh();
   }
   function clearList() {
     if (!confirm("Wyczyścić całą listę zakupów? Ilości wrócą do zera.")) return;
     for (const p of state.products) { p.qty = 0; p.done = false; }
     save(); render(); toast("Lista wyczyszczona");
   }
+  // Udostępnia listę jako LINK — druga osoba otwiera go i może odhaczać produkty
+  // u siebie w sklepie. Cała lista jest zakodowana w adresie (bez żadnego serwera).
   function shareList() {
-    const lines = state.products.filter(p => p.qty > 0)
-      .map(p => `• ${p.name} — ${p.qty}${p.unit ? " " + p.unit : ""}`);
-    if (!lines.length) { toast("Lista jest pusta"); return; }
-    const text = "🛒 Lista zakupów\n" + lines.join("\n");
-    if (navigator.share) { navigator.share({ text }).catch(() => {}); }
-    else { navigator.clipboard.writeText(text).then(() => toast("Skopiowano listę")); }
+    const items = state.products.filter(p => p.qty > 0);
+    if (!items.length) { toast("Lista jest pusta"); return; }
+    const payload = { t: "Lista zakupów", i: items.map(p => [p.name, p.qty, p.unit || "", p.cat]) };
+    const url = location.origin + location.pathname + "#l=" + b64urlFromUtf8(JSON.stringify(payload));
+    const text = "🛒 Wysyłam Ci listę zakupów — otwórz link i możesz odhaczać produkty w sklepie:";
+    if (navigator.share) { navigator.share({ title: "Lista zakupów", text, url }).catch(() => {}); }
+    else { navigator.clipboard.writeText(text + "\n" + url).then(() => toast("Skopiowano link — wklej go w wiadomości")); }
   }
+  // Bezpieczne (UTF-8) kodowanie/dekodowanie do adresu URL.
+  function b64urlFromUtf8(str) {
+    return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function utf8FromB64url(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+    return decodeURIComponent(escape(atob(s)));
+  }
+  function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
   // ---------- Widoki ----------
   function setTab(tab) { state.tab = tab; render(); window.scrollTo(0, 0); }
 
-  function render() {
-    // dolna nawigacja
+  function updateNav() {
     $("#tab-katalog").classList.toggle("active", state.tab === "katalog");
     $("#tab-lista").classList.toggle("active", state.tab === "lista");
     const n = selectedCount(), badge = $("#list-badge");
     badge.style.display = n ? "flex" : "none"; badge.textContent = n;
-
+  }
+  // Pełne przerysowanie widoku (zmiana zakładki, wejście/wyjście z edycji).
+  function render() {
+    updateNav();
     if (state.tab === "katalog") renderKatalog(); else renderLista();
+  }
+  // Lekkie odświeżenie po zmianie ilości/odhaczeniu — NIE rusza pola wyszukiwania
+  // ani pozycji przewijania.
+  function refresh() {
+    updateNav();
+    if (state.tab === "katalog") fillProductList();
+    else { const y = window.scrollY; renderLista(); window.scrollTo(0, y); }
   }
 
   function svgSearch() {
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
   }
 
+  // Buduje SZKIELET katalogu (wyszukiwarka + pasek przycisków + pusty kontener listy)
+  // raz. Pole wyszukiwania nie jest już przerysowywane przy pisaniu — dlatego kursor
+  // i fokus zostają na miejscu i można pisać płynnie.
   function renderKatalog() {
-    const q = state.search.trim().toLowerCase();
-    const cats = catsInOrder();
-    let html = `
+    $("#view").innerHTML = `
       <div class="search-wrap">
         <div class="search">${svgSearch()}
           <input id="searchbox" placeholder="Szukaj produktu…" value="${escapeAttr(state.search)}" />
@@ -256,14 +298,25 @@
         <div class="bar">
           <button class="btn btn-primary" onclick="openAddModal()">＋ Dodaj produkt</button>
           <button class="btn btn-ghost" onclick="toggleEdit()">${state.editMode ? "✓ Gotowe" : "✎ Edytuj bazę"}</button>
-        </div>`;
+        </div>
+        <div id="product-list"></div>
+      </main>`;
+    $("#sub").textContent = "Zaznacz, co chcesz kupić";
+    const box = $("#searchbox");
+    box.addEventListener("input", () => { state.search = box.value; fillProductList(); });
+    fillProductList();
+  }
 
-    let any = false;
-    for (const cat of cats) {
+  // Przerysowuje TYLKO listę produktów (nie dotyka pola wyszukiwania).
+  function fillProductList() {
+    const list = $("#product-list");
+    if (!list) return renderKatalog();
+    const q = state.search.trim().toLowerCase();
+    let html = "", any = false;
+    for (const cat of catsInOrder()) {
       let items = state.products.filter(p => p.cat === cat);
       if (q) items = items.filter(p => p.name.toLowerCase().includes(q));
-      // ulubione na górze w obrębie kategorii
-      items.sort((a, b) => (b.fav - a.fav) || a.name.localeCompare(b.name, "pl"));
+      items.sort((a, b) => (b.fav - a.fav) || a.name.localeCompare(b.name, "pl")); // ulubione na górze
       if (!items.length) continue;
       any = true;
       html += `<div class="cat-title">${escapeHtml(cat)}</div><div class="card">`;
@@ -271,16 +324,7 @@
       html += `</div>`;
     }
     if (!any) html += `<div class="empty"><div class="big">🔍</div>Brak produktów pasujących do „${escapeHtml(state.search)}"</div>`;
-    html += `</main>`;
-    $("#view").innerHTML = html;
-    $("#sub").textContent = "Zaznacz, co chcesz kupić";
-
-    const box = $("#searchbox");
-    box.addEventListener("input", (e) => { state.search = e.target.value; state._focusSearch = true; renderKatalog(); });
-    box.addEventListener("focus", () => { state._focusSearch = true; });
-    box.addEventListener("blur", () => { state._focusSearch = false; });
-    // utrzymaj fokus/kursor tylko gdy użytkowniczka faktycznie pisze w wyszukiwarce
-    if (state._focusSearch) { box.focus(); const v = box.value; box.value = ""; box.value = v; }
+    list.innerHTML = html;
   }
 
   function rowKatalog(p) {
@@ -371,15 +415,82 @@
     const name = $("#m-name").value, cat = $("#m-cat").value, unit = $("#m-unit").value;
     if (!name.trim()) { $("#m-name").focus(); return; }
     addProduct(name, cat, unit);
-    closeModal(); render(); toast("Dodano do bazy");
+    closeModal(); refresh(); toast("Dodano do bazy");
   }
 
   // ---------- Escapowanie ----------
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   function escapeAttr(s) { return escapeHtml(s); }
 
+  // ---------- Tryb udostępnionej listy (odbiorca) ----------
+  // Gdy adres zawiera #l=... , pokazujemy listę przysłaną przez inną osobę.
+  // Odbiorca może ją odhaczać — jego odhaczenia zapisują się w JEGO telefonie
+  // (osobno, nie ruszają jego własnej apki).
+  let sharedItems = null;
+  function enterSharedModeIfNeeded() {
+    const m = location.hash.match(/[#&]l=([^&]+)/);
+    if (!m) return false;
+    let payload;
+    try { payload = JSON.parse(utf8FromB64url(m[1])); } catch (e) { return false; }
+    const key = "moje-zakupy-shared:" + hashCode(m[1]);
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key)) || {}; } catch (e) {}
+    sharedItems = payload.i.map(([name, qty, unit, cat]) => ({ name, qty, unit, cat, done: !!saved[name] }));
+    document.querySelector(".tabbar").style.display = "none";
+    document.querySelector("header h1").textContent = "📩 " + (payload.t || "Udostępniona lista");
+    window._sharedKey = key;
+    renderShared();
+    return true;
+  }
+  function saveShared() {
+    const d = {}; sharedItems.forEach(it => { if (it.done) d[it.name] = 1; });
+    localStorage.setItem(window._sharedKey, JSON.stringify(d));
+  }
+  function sharedToggle(idx) { sharedItems[idx].done = !sharedItems[idx].done; saveShared(); renderShared(); }
+  function importShared() {
+    load(); // wczytaj własną bazę odbiorcy
+    for (const it of sharedItems) {
+      let p = state.products.find(x => x.name === it.name);
+      if (!p) { addProduct(it.name, it.cat, it.unit); p = state.products.find(x => x.name === it.name); }
+      if (p) p.qty = it.qty;
+    }
+    save();
+    location.href = location.pathname; // przeładuj do własnej apki (lista będzie gotowa)
+  }
+  function renderShared() {
+    const done = sharedItems.filter(i => i.done).length, total = sharedItems.length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const y = window.scrollY;
+    $("#sub").textContent = "Możesz odhaczać produkty w sklepie";
+    const cats = [...new Set(sharedItems.map(i => i.cat || "Inne"))];
+    let html = `<main>
+      <div class="progress"><span style="width:${pct}%"></span></div>
+      <div class="hint">Kupione ${done} z ${total} • dotknij kwadrat, gdy wrzucisz do koszyka</div>`;
+    for (const cat of cats) {
+      const its = sharedItems.map((it, idx) => ({ it, idx })).filter(o => (o.it.cat || "Inne") === cat);
+      html += `<div class="cat-title">${escapeHtml(cat)}</div><div class="card">`;
+      for (const { it, idx } of its) {
+        html += `<div class="list-item ${it.done ? "done" : ""}">
+          <div class="check" onclick="sharedToggle(${idx})">${it.done ? "✓" : ""}</div>
+          <div class="name">${escapeHtml(it.name)}</div>
+          <div class="qtybadge">${it.qty}${it.unit ? " " + escapeHtml(it.unit) : ""}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `<div class="bar" style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="importShared()">➕ Dodaj do mojej apki</button>
+        <button class="btn btn-primary" onclick="location.href=location.pathname">🛒 Moja apka</button>
+      </div>
+      <div class="hint" style="text-align:center;margin-top:4px">
+        To lista od innej osoby. Twoje odhaczenia zapisują się w Twoim telefonie.
+      </div></main>`;
+    $("#view").innerHTML = html;
+    window.scrollTo(0, y);
+  }
+
   // ---------- Start ----------
-  load(); render();
+  if (!enterSharedModeIfNeeded()) { load(); render(); }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
