@@ -299,6 +299,10 @@
           <button class="btn btn-primary" onclick="openAddModal()">＋ Dodaj produkt</button>
           <button class="btn btn-ghost" onclick="toggleEdit()">${state.editMode ? "✓ Gotowe" : "✎ Edytuj bazę"}</button>
         </div>
+        ${state.editMode ? `<div class="bar" style="padding-top:0">
+          <button class="btn btn-ghost" onclick="openBackupModal()">📤 Zrób kopię</button>
+          <button class="btn btn-ghost" onclick="openRestoreModal()">📥 Wczytaj kopię</button>
+        </div>` : ""}
         <div id="product-list"></div>
       </main>`;
     $("#sub").textContent = "Zaznacz, co chcesz kupić";
@@ -416,6 +420,75 @@
     if (!name.trim()) { $("#m-name").focus(); return; }
     addProduct(name, cat, unit);
     closeModal(); refresh(); toast("Dodano do bazy");
+  }
+
+  // ---------- Kopia zapasowa / przenoszenie bazy między urządzeniami ----------
+  function openBackupModal() {
+    const json = JSON.stringify({ v: CATALOG_VERSION, products: state.products, deleted: state.deleted });
+    window._backupJson = json;
+    const code = b64urlFromUtf8(json);
+    const bg = document.createElement("div"); bg.className = "modal-bg";
+    bg.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
+      <h2>Kopia Twojej bazy</h2>
+      <div class="hint" style="padding:0 0 10px">Skopiuj ten kod i prześlij go sobie (np. na WhatsApp albo e-mail),
+        a na drugim telefonie wczytaj przez „Wczytaj kopię". Możesz też pobrać plik.</div>
+      <textarea id="bk-code" readonly style="width:100%;height:110px;font-size:12px;border-radius:12px;
+        border:1px solid var(--border);background:var(--bg);color:var(--text);padding:10px">${escapeHtml(code)}</textarea>
+      <div class="bar" style="padding:10px 0 0">
+        <button class="btn btn-ghost" onclick="downloadBackup()">💾 Pobierz plik</button>
+        <button class="btn btn-primary" onclick="copyBackup()">📋 Kopiuj kod</button>
+      </div>
+      <div class="bar" style="padding:8px 0 0"><button class="btn btn-ghost" onclick="closeModal()">Zamknij</button></div>
+    </div>`;
+    bg.addEventListener("click", closeModal); document.body.appendChild(bg); state._modal = bg;
+  }
+  function copyBackup() {
+    const t = $("#bk-code"); t.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject())
+      .then(() => toast("Skopiowano kod")).catch(() => toast("Zaznacz kod i skopiuj ręcznie"));
+  }
+  function downloadBackup() {
+    const blob = new Blob([window._backupJson], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "moje-zakupy-kopia.json"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast("Pobrano plik kopii");
+  }
+  function openRestoreModal() {
+    const bg = document.createElement("div"); bg.className = "modal-bg";
+    bg.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
+      <h2>Wczytaj kopię</h2>
+      <div class="hint" style="padding:0 0 10px">Wklej kod kopii albo wybierz plik.
+        To zastąpi obecną bazę na tym urządzeniu.</div>
+      <textarea id="rs-code" placeholder="Wklej tutaj kod kopii…" style="width:100%;height:110px;font-size:12px;
+        border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);padding:10px"></textarea>
+      <div class="field" style="margin-top:10px"><label>…albo plik kopii (.json)</label>
+        <input type="file" id="rs-file" accept=".json,application/json" /></div>
+      <div class="bar" style="padding:6px 0 0">
+        <button class="btn btn-ghost" onclick="closeModal()">Anuluj</button>
+        <button class="btn btn-primary" onclick="doRestore()">Wczytaj</button>
+      </div>
+    </div>`;
+    bg.addEventListener("click", closeModal); document.body.appendChild(bg); state._modal = bg;
+    $("#rs-file").addEventListener("change", (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const r = new FileReader(); r.onload = () => { $("#rs-code").value = r.result; }; r.readAsText(f);
+    });
+  }
+  function parseBackup(text) {
+    text = (text || "").trim(); if (!text) return null;
+    try { const o = JSON.parse(text); if (o && Array.isArray(o.products)) return o; } catch (e) {}
+    try { const o = JSON.parse(utf8FromB64url(text)); if (o && Array.isArray(o.products)) return o; } catch (e) {}
+    return null;
+  }
+  function doRestore() {
+    const data = parseBackup($("#rs-code").value);
+    if (!data) { toast("Nie rozpoznano kopii — sprawdź kod/plik"); return; }
+    if (!confirm("Zastąpić obecną bazę wczytaną kopią? Obecne dane na tym urządzeniu zostaną nadpisane.")) return;
+    state.products = data.products;
+    state.deleted = Array.isArray(data.deleted) ? data.deleted : [];
+    mergeNewDefaults(); // bezpiecznik: dołóż aktualne domyślne produkty/kategorie (np. „Kasze i ryż"),
+                        // gdyby kopia była starsza — bez kasowania tego, co w kopii
+    save(); closeModal(); state.editMode = false; state.search = ""; render(); toast("Wczytano kopię ✓");
   }
 
   // ---------- Escapowanie ----------
