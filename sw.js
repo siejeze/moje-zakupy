@@ -2,7 +2,7 @@
 // Strategia "sieć najpierw": gdy jest internet, zawsze pobiera najnowszą wersję
 // (więc aktualizacje z GitHuba pojawiają się od razu); offline korzysta z kopii.
 // Numer w nazwie cache podbijamy przy każdej aktualizacji plików.
-const CACHE = "zakupy-v5";
+const CACHE = "zakupy-v7";
 const ASSETS = [
   ".",
   "index.html",

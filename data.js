@@ -1,6 +1,7 @@
-// Domyślny katalog produktów (bazowany na typowym asortymencie Lidla).
-// To tylko punkt startowy — możesz dodawać własne produkty i usuwać te,
-// których nie kupujesz. Twoje zmiany zapisują się w telefonie.
+// Domyślny katalog produktów — wersja Ani (266 produktów).
+// To baza, którą dostaje każdy po instalacji apki (Ania i córki mają to samo).
+// W apce można dodawać własne produkty i usuwać te, których się nie kupuje —
+// zmiany zapisują się w telefonie.
 window.DEFAULT_CATALOG = [
   {
     cat: "Warzywa",
@@ -10,13 +11,18 @@ window.DEFAULT_CATALOG = [
       "Kapusta biała", "Kapusta pekińska", "Kapusta kiszona", "Ogórki kiszone",
       "Cebula", "Cebula czerwona", "Czosnek", "Por", "Seler naciowy", "Pieczarki",
       "Awokado", "Rzodkiewka", "Marchew", "Kalarepa", "Botwinka", "Koperek", "Natka pietruszki",
+      "Ciecierzyca w słoiku", "Ciecierzyca sucha", "Szczypiorek", "Bazylia świeża",
+      "Awokado Hass", "Imbir", "Imbir marynowany", "Ogórki małosolne", "Ziemniaki",
+      "Kapusta włoska", "Kolendra świeża",
     ],
   },
   {
     cat: "Owoce",
     items: [
-      "Cytryny", "Limonki", "Maliny", "Truskawki", "Borówki", "Jeżyny",
-      "Jabłka", "Grejpfrut", "Oliwki zielone", "Oliwki czarne",
+      "Cytryny", "Limonki", "Maliny", "Truskawki", "Jeżyny", "Jabłka", "Grejpfrut",
+      "Gruszki", "Czereśnie", "Mango", "Melon", "Arbuz", "Wiśnie", "Wiśnie mrożone",
+      "Pomarańcze", "Banany",
+      "Borówki (jagody)", "Borówki (jagody) mrożone", "Nektarynki", "Brzoskwinie",
     ],
   },
   {
@@ -49,6 +55,8 @@ window.DEFAULT_CATALOG = [
       "Serek wiejski", "Twaróg", "Serek mascarpone", "Ser żółty (plastry)", "Ser gouda",
       "Mozzarella", "Ser feta", "Parmezan", "Ser pleśniowy", "Jogurt grecki naturalny",
       "Jogurt naturalny", "Kefir", "Maślanka", "Śmietanka 36% do ubijania", "Mleko",
+      "Jogurt kokosowy", "Tofu naturalne", "Tofu wędzone", "Twaróg wędzony",
+      "Mleczko kokosowe w puszce", "Mleko kokosowe barista w kartonie",
     ],
   },
   {
@@ -62,6 +70,7 @@ window.DEFAULT_CATALOG = [
     items: [
       "Chleb", "Bułki", "Chleb keto / niskowęglowodanowy", "Mąka migdałowa",
       "Mąka kokosowa", "Mąka lniana", "Babka jajowata (błonnik)", "Wafle ryżowe",
+      "Chleb górski (z Lidla)", "Wafle ryżowe paprykowe",
     ],
   },
   {
@@ -76,11 +85,12 @@ window.DEFAULT_CATALOG = [
   {
     cat: "Spiżarnia",
     items: [
-      "Passata pomidorowa", "Pomidory w puszce", "Koncentrat pomidorowy", "Mleczko kokosowe",
+      "Passata pomidorowa", "Pomidory w puszce", "Koncentrat pomidorowy",
       "Bulion / kostki rosołowe", "Ocet jabłkowy", "Musztarda", "Sos sojowy",
       "Orzechy włoskie", "Orzechy laskowe", "Migdały", "Orzechy nerkowca", "Pestki dyni",
       "Pestki słonecznika", "Siemię lniane", "Nasiona chia", "Wiórki kokosowe",
-      "Masło orzechowe", "Kakao gorzkie", "Żelatyna",
+      "Masło orzechowe", "Kakao gorzkie", "Żelatyna", "Ryż", "Arkusze Nori do sushi",
+      "Oliwki zielone", "Oliwki czarne", "Mleczko kokosowe",
     ],
   },
   {
@@ -88,14 +98,15 @@ window.DEFAULT_CATALOG = [
     items: [
       "Sól", "Pieprz", "Papryka słodka", "Papryka ostra", "Oregano", "Bazylia", "Tymianek",
       "Rozmaryn", "Curry", "Kurkuma", "Cynamon", "Czosnek granulowany", "Zioła prowansalskie",
-      "Liść laurowy", "Ziele angielskie", "Vegeta / przyprawa do potraw",
+      "Liść laurowy", "Ziele angielskie", "Vegeta / przyprawa do potraw", "Pasta wasabi do sushi",
     ],
   },
   {
     cat: "Napoje",
     items: [
       "Woda niegazowana", "Woda gazowana", "Woda mineralna", "Kawa mielona", "Kawa ziarnista",
-      "Herbata", "Herbata ziołowa", "Napój bezcukrowy (zero)", "Sok pomidorowy",
+      "Napój bezcukrowy (zero)", "Sok pomidorowy", "Herbata zielona z mango",
+      "Herbata czarna Lipton", "Herbata miętowa", "Herbata rumiankowa", "Herbata", "Herbata ziołowa",
     ],
   },
   {
@@ -136,6 +147,12 @@ window.DEFAULT_CATALOG = [
       "Orlando Pure Taste – mokra (pies)", "Orlando Pure Taste – sucha (pies)",
       "Orlando Pure Taste – mokra (kot)", "Orlando Pure Taste – sucha (kot)",
       "Przysmaki dla psa", "Przysmaki dla kota", "Żwirek dla kota", "Woreczki na odchody",
+    ],
+  },
+  {
+    cat: "Inne",
+    items: [
+      "Baterie paluszki", "Baterie paluszki 3A",
     ],
   },
 ];
